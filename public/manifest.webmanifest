@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "Qikki",
+  "short_name": "Qikki",
+  "description": "Lightweight minimalist reminder scheduler with weekly & monthly recurrence, custom sound synthesis, and vibration patterns.",
+  "theme_color": "#0F172A",
+  "background_color": "#F8FAFC",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

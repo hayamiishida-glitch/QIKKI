@@ -1,0 +1,8 @@
+{
+  "name": "Cadence — Minimalist Desktop & Cross-Platform Reminders",
+  "description": "Lightweight, fluid reminder scheduler with weekly & monthly recurrence, custom synthesized sounds, custom vibration patterns, Windows desktop PWA support, and cloud-sync-ready architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

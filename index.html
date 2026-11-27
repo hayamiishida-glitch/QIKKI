@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en" class="select-none" style="-webkit-user-select: none; user-select: none;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Qikki</title>
+    <meta name="application-name" content="Qikki" />
+    <meta
+      name="description"
+      content="Qikki — Lightweight, fluid reminder scheduler with weekly and monthly recurrence, synthesized sounds, custom vibration patterns, and cloud sync."
+    />
+    <meta property="og:site_name" content="Qikki" />
+    <meta property="og:title" content="Qikki" />
+    <meta
+      property="og:description"
+      content="Qikki — Lightweight, fluid reminder scheduler with weekly and monthly recurrence, synthesized sounds, custom vibration patterns, and cloud sync."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0F172A" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Qikki" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1.1.3" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png?v=1.1.3" />
+    <link rel="icon" href="/favicon.ico?v=1.1.3" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg?v=1.1.3" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('cadence_theme_mode');
+          if (t !== 'light') document.documentElement.classList.add('dark');
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+
+        // 1. Prevent any text selection on interface hold, click or drag
+        document.addEventListener('selectstart', function (e) {
+          var t = e.target;
+          if (t && t.closest && t.closest('input, textarea, [contenteditable="true"], [contenteditable=""]')) {
+            return;
+          }
+          e.preventDefault();
+          var sel = window.getSelection ? window.getSelection() : null;
+          if (sel && sel.removeAllRanges) {
+            sel.removeAllRanges();
+          }
+        }, true);
+
+        // 2. Silence Vite HMR websocket reconnection attempts in AI Studio cloud proxy
+        if (typeof window !== 'undefined' && window.WebSocket) {
+          var NativeWS = window.WebSocket;
+          window.WebSocket = function (url, protocols) {
+            if (
+              typeof url === 'string' &&
+              (url.indexOf('5173') !== -1 ||
+                url.indexOf('localhost') !== -1 ||
+                url.indexOf('vite-hmr') !== -1)
+            ) {
+              return {
+                readyState: 3,
+                close: function () {},
+                send: function () {},
+                addEventListener: function () {},
+                removeEventListener: function () {},
+                dispatchEvent: function () {
+                  return false;
+                },
+              };
+            }
+            return new NativeWS(url, protocols);
+          };
+          window.WebSocket.prototype = NativeWS.prototype;
+        }
+      })();
+    </script>
+  </head>
+  <body
+    style="-webkit-user-select: none; user-select: none;"
+    class="bg-[#eef4ff] text-slate-900 antialiased select-none dark:bg-[#050811] dark:text-slate-100"
+  >
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

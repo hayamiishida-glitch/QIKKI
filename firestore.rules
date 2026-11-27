@@ -1,0 +1,312 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isOwner(userId) && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.firebase.sign_in_provider == 'password'
+      );
+    }
+
+    // Validation blueprints matching firebase-blueprint.json
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'email', 'displayName', 'photoURL', 'lastActiveDevice', 'createdAt', 'updatedAt'
+      ]) && data.keys().hasOnly([
+        'uid', 'email', 'displayName', 'photoURL', 'lastActiveDevice', 'createdAt', 'updatedAt'
+      ]) &&
+      data.uid is string && data.uid == userId && data.uid == request.auth.uid && isValidId(data.uid) &&
+      data.email is string && data.email.size() <= 254 &&
+      data.displayName is string && data.displayName.size() <= 120 &&
+      data.photoURL is string && data.photoURL.size() <= 65536 &&
+      data.lastActiveDevice is string && data.lastActiveDevice.size() <= 80 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidRecurrence(rec) {
+      return rec is map &&
+        rec.keys().hasAll([
+          'frequency', 'interval', 'weekdays', 'monthlyMode', 'dayOfMonth', 'nthWeek', 'weekday', 'targetCount'
+        ]) &&
+        rec.keys().hasOnly([
+          'frequency', 'interval', 'weekdays', 'monthlyMode', 'dayOfMonth', 'nthWeek', 'weekday', 'targetCount'
+        ]) &&
+        rec.frequency in ['none', 'weekly', 'monthly'] &&
+        rec.interval is int && rec.interval >= 1 && rec.interval <= 100 &&
+        rec.weekdays is list && rec.weekdays.size() <= 7 &&
+        (rec.weekdays.size() == 0 || rec.weekdays[0] is int) &&
+        rec.monthlyMode in ['day-of-month', 'last-day', 'nth-weekday'] &&
+        rec.dayOfMonth is int && rec.dayOfMonth >= 1 && rec.dayOfMonth <= 31 &&
+        rec.nthWeek is int && rec.nthWeek >= -1 && rec.nthWeek <= 4 &&
+        rec.weekday is int && rec.weekday >= 0 && rec.weekday <= 6 &&
+        (rec.targetCount == null || (rec.targetCount is int && rec.targetCount >= 1 && rec.targetCount <= 365));
+    }
+
+    function isValidSound(snd) {
+      return snd is map &&
+        snd.keys().hasAll(['presetId', 'volume', 'repeatCount']) &&
+        snd.keys().hasOnly(['presetId', 'volume', 'repeatCount']) &&
+        snd.presetId is string && snd.presetId.size() >= 1 && snd.presetId.size() <= 40 &&
+        snd.volume is number && snd.volume >= 0 && snd.volume <= 1 &&
+        snd.repeatCount is int && snd.repeatCount >= 1 && snd.repeatCount <= 5;
+    }
+
+    function isValidVibration(vib) {
+      return vib is map &&
+        vib.keys().hasAll(['presetId', 'label', 'pattern']) &&
+        vib.keys().hasOnly(['presetId', 'label', 'pattern']) &&
+        vib.presetId is string && vib.presetId.size() >= 1 && vib.presetId.size() <= 40 &&
+        vib.label is string && vib.label.size() <= 60 &&
+        vib.pattern is list && vib.pattern.size() <= 20 &&
+        (vib.pattern.size() == 0 || vib.pattern[0] is int);
+    }
+
+    function isOptionalDateString(val) {
+      return val == null || (val is string && val.size() <= 40);
+    }
+
+    function isValidReminder(data, userId, reminderId) {
+      return data.keys().hasAll([
+        'id', 'ownerId', 'title', 'notes', 'location', 'triggerAt', 'timezone',
+        'recurrence', 'sound', 'vibration', 'status',
+        'snoozedUntil', 'lastTriggeredAt', 'completedCount',
+        'createdAt', 'updatedAt', 'serverCreatedAt', 'serverUpdatedAt',
+        'syncVersion', 'deviceOrigin', 'deletedAt', 'expiresAt'
+      ]) && data.keys().hasOnly([
+        'id', 'ownerId', 'title', 'notes', 'location', 'triggerAt', 'timezone',
+        'recurrence', 'sound', 'vibration', 'status',
+        'snoozedUntil', 'lastTriggeredAt', 'completedCount',
+        'createdAt', 'updatedAt', 'serverCreatedAt', 'serverUpdatedAt',
+        'syncVersion', 'deviceOrigin', 'deletedAt', 'expiresAt'
+      ]) &&
+      isValidId(data.id) && data.id == reminderId &&
+      isValidId(data.ownerId) && data.ownerId == userId && data.ownerId == request.auth.uid &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 240 &&
+      data.notes is string && data.notes.size() <= 2000 &&
+      data.location is string && data.location.size() <= 240 &&
+      data.triggerAt is string && data.triggerAt.size() >= 1 && data.triggerAt.size() <= 40 &&
+      data.timezone is string && data.timezone.size() >= 1 && data.timezone.size() <= 80 &&
+      isValidRecurrence(data.recurrence) &&
+      isValidSound(data.sound) &&
+      isValidVibration(data.vibration) &&
+      data.status in ['active', 'snoozed', 'completed'] &&
+      isOptionalDateString(data.snoozedUntil) &&
+      isOptionalDateString(data.lastTriggeredAt) &&
+      data.completedCount is int && data.completedCount >= 0 &&
+      data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 40 &&
+      data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 40 &&
+      data.serverCreatedAt is timestamp &&
+      data.serverUpdatedAt is timestamp &&
+      data.syncVersion is int && data.syncVersion >= 1 &&
+      data.deviceOrigin is string && data.deviceOrigin.size() <= 80 &&
+      isOptionalDateString(data.deletedAt) &&
+      isOptionalDateString(data.expiresAt);
+    }
+
+    function isValidWeatherLocation(loc) {
+      return loc == null || (
+        loc is map &&
+        loc.keys().hasAll(['latitude', 'longitude', 'locationName', 'regionLabel', 'source']) &&
+        loc.keys().hasOnly(['latitude', 'longitude', 'locationName', 'regionLabel', 'source']) &&
+        loc.latitude is number && loc.latitude >= -90 && loc.latitude <= 90 &&
+        loc.longitude is number && loc.longitude >= -180 && loc.longitude <= 180 &&
+        loc.locationName is string && loc.locationName.size() <= 120 &&
+        loc.regionLabel is string && loc.regionLabel.size() <= 160 &&
+        loc.source in ['gps', 'ip', 'manual']
+      );
+    }
+
+    function isValidPreferences(data, userId) {
+      return data.keys().hasAll([
+        'ownerId', 'appTheme', 'notificationTheme', 'clockFormat', 'accentColor', 'uiTransparency',
+        'defaultSoundPreset', 'defaultSoundVolume', 'defaultSnoozeMinutes', 'defaultVibrationPresetId',
+        'temperatureUnit', 'showHeaderWeather', 'weatherLocation',
+        'launchAtStartup', 'startMinimized', 'minimizeToTray', 'autoDownloadUpdates',
+        'showHolidays', 'holidayCountryCode', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ownerId', 'appTheme', 'notificationTheme', 'clockFormat', 'accentColor', 'uiTransparency',
+        'defaultSoundPreset', 'defaultSoundVolume', 'defaultSnoozeMinutes', 'defaultVibrationPresetId',
+        'temperatureUnit', 'showHeaderWeather', 'weatherLocation',
+        'launchAtStartup', 'startMinimized', 'minimizeToTray', 'autoDownloadUpdates',
+        'showHolidays', 'holidayCountryCode', 'updatedAt'
+      ]) &&
+      isValidId(data.ownerId) && data.ownerId == userId && data.ownerId == request.auth.uid &&
+      data.appTheme in ['light', 'dark'] &&
+      data.notificationTheme in ['match', 'light', 'dark'] &&
+      data.clockFormat in ['24h', '12h'] &&
+      data.accentColor in ['blue', 'violet', 'teal', 'emerald', 'rose', 'orange'] &&
+      data.uiTransparency is int && data.uiTransparency >= 0 && data.uiTransparency <= 100 &&
+      data.defaultSoundPreset in [
+        'ios-tri-tone', 'ios-note', 'ios-chime', 'ios-bamboo', 'ios-aurora', 'ios-pulse',
+        'crystal-chime', 'soft-pulse', 'beacon-tone', 'zen-gong', 'digital-ping',
+        'aurora-harp', 'amber-marimba', 'dewdrop-bell', 'horizon-chord', 'brisk-triad',
+        'midnight-sonar', 'silent'
+      ] &&
+      data.defaultSoundVolume is number && data.defaultSoundVolume >= 0 && data.defaultSoundVolume <= 1 &&
+      data.defaultSnoozeMinutes in [5, 10, 15, 30] &&
+      data.defaultVibrationPresetId is string && data.defaultVibrationPresetId.size() >= 1 && data.defaultVibrationPresetId.size() <= 40 &&
+      data.temperatureUnit in ['c', 'f'] &&
+      data.showHeaderWeather is bool &&
+      isValidWeatherLocation(data.weatherLocation) &&
+      data.launchAtStartup is bool &&
+      data.startMinimized is bool &&
+      data.minimizeToTray is bool &&
+      data.autoDownloadUpdates is bool &&
+      data.showHolidays is bool &&
+      data.holidayCountryCode is string && data.holidayCountryCode.size() >= 2 && data.holidayCountryCode.size() <= 10 && data.holidayCountryCode.matches('^(AUTO|[A-Z]{2,4})$') &&
+      data.updatedAt is timestamp;
+    }
+
+    // Private User Profile
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isVerifiedOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'email', 'displayName', 'photoURL', 'lastActiveDevice', 'updatedAt'
+        ]);
+
+      allow delete: if isVerifiedOwner(userId) &&
+        isValidId(userId) &&
+        existing().uid == request.auth.uid;
+
+      // User Reminders Subcollection
+      match /reminders/{reminderId} {
+        allow get: if isOwner(userId) && isValidId(reminderId);
+        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isVerifiedOwner(userId) &&
+          isValidId(reminderId) &&
+          isValidReminder(incoming(), userId, reminderId) &&
+          incoming().serverCreatedAt == request.time &&
+          incoming().serverUpdatedAt == request.time;
+
+        allow update: if isVerifiedOwner(userId) &&
+          isValidId(reminderId) &&
+          isValidReminder(incoming(), userId, reminderId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().serverCreatedAt == existing().serverCreatedAt &&
+          incoming().serverUpdatedAt == request.time &&
+          (
+            // Action 1: Edit reminder schedule, details, location, sound, vibration, or recurrence
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'notes', 'location', 'triggerAt', 'timezone', 'recurrence', 'sound', 'vibration',
+              'status', 'snoozedUntil', 'lastTriggeredAt', 'updatedAt', 'serverUpdatedAt',
+              'syncVersion', 'deviceOrigin'
+            ]) ||
+            // Action 2: Trigger, snooze, complete, advance recurrence, or reactivate
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'location', 'triggerAt', 'status', 'snoozedUntil', 'lastTriggeredAt', 'completedCount',
+              'updatedAt', 'serverUpdatedAt', 'syncVersion', 'deviceOrigin'
+            ]) ||
+            // Action 3: Soft delete or restore from 7-day Recently Deleted
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'location', 'deletedAt', 'expiresAt', 'updatedAt', 'serverUpdatedAt', 'syncVersion', 'deviceOrigin'
+            ]) ||
+            // Action 4: Cross-device conflict resolution sync merge
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'notes', 'location', 'triggerAt', 'timezone', 'recurrence', 'sound', 'vibration',
+              'status', 'snoozedUntil', 'lastTriggeredAt', 'completedCount',
+              'deletedAt', 'expiresAt', 'updatedAt', 'serverUpdatedAt',
+              'syncVersion', 'deviceOrigin'
+            ])
+          );
+
+        allow delete: if isVerifiedOwner(userId) &&
+          isValidId(reminderId) &&
+          existing().ownerId == request.auth.uid;
+      }
+
+      // User Preferences Subcollection
+      match /preferences/{prefId} {
+        allow get: if isOwner(userId) && isValidId(prefId);
+        allow list: if isOwner(userId) && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isVerifiedOwner(userId) &&
+          isValidId(prefId) &&
+          isValidPreferences(incoming(), userId) &&
+          incoming().updatedAt == request.time;
+
+        allow update: if isVerifiedOwner(userId) &&
+          isValidId(prefId) &&
+          isValidPreferences(incoming(), userId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().updatedAt == request.time &&
+          (
+            // Action 1: Appearance & glass customization
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'appTheme', 'notificationTheme', 'clockFormat', 'accentColor', 'uiTransparency', 'updatedAt'
+            ]) ||
+            // Action 2: Notification & alert defaults
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'defaultSoundPreset', 'defaultSoundVolume', 'defaultSnoozeMinutes', 'defaultVibrationPresetId', 'updatedAt'
+            ]) ||
+            // Action 3: Weather, location & localized holidays customization
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'temperatureUnit', 'showHeaderWeather', 'weatherLocation', 'showHolidays', 'holidayCountryCode', 'updatedAt'
+            ]) ||
+            // Action 4: Startup, tray & auto-update preferences
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'launchAtStartup', 'startMinimized', 'minimizeToTray', 'autoDownloadUpdates', 'updatedAt'
+            ]) ||
+            // Action 5: Full settings sync / schema upgrade across devices
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'appTheme', 'notificationTheme', 'clockFormat', 'accentColor', 'uiTransparency',
+              'defaultSoundPreset', 'defaultSoundVolume', 'defaultSnoozeMinutes', 'defaultVibrationPresetId',
+              'temperatureUnit', 'showHeaderWeather', 'weatherLocation',
+              'launchAtStartup', 'startMinimized', 'minimizeToTray', 'autoDownloadUpdates',
+              'showHolidays', 'holidayCountryCode', 'updatedAt'
+            ])
+          );
+
+        allow delete: if isVerifiedOwner(userId) &&
+          isValidId(prefId) &&
+          existing().ownerId == request.auth.uid;
+      }
+    }
+  }
+}

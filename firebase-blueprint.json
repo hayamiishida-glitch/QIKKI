@@ -1,0 +1,296 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated Google user profile for Qikki cloud sync",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "lastActiveDevice": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "displayName", "photoURL", "lastActiveDevice", "createdAt", "updatedAt"]
+    },
+    "ReminderItem": {
+      "title": "ReminderItem",
+      "description": "Synced reminder schedule including recurrence, sound, vibration, and soft-delete retention fields",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "triggerAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "recurrence": {
+          "type": "object"
+        },
+        "sound": {
+          "type": "object"
+        },
+        "vibration": {
+          "type": "object"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "snoozed", "completed"]
+        },
+        "snoozedUntil": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "lastTriggeredAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "completedCount": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "updatedAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "serverCreatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "serverUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "syncVersion": {
+          "type": "integer"
+        },
+        "deviceOrigin": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "deletedAt": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "expiresAt": {
+          "type": "string",
+          "maxLength": 40
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "title",
+        "notes",
+        "location",
+        "triggerAt",
+        "timezone",
+        "recurrence",
+        "sound",
+        "vibration",
+        "status",
+        "snoozedUntil",
+        "lastTriggeredAt",
+        "completedCount",
+        "createdAt",
+        "updatedAt",
+        "serverCreatedAt",
+        "serverUpdatedAt",
+        "syncVersion",
+        "deviceOrigin",
+        "deletedAt",
+        "expiresAt"
+      ]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "Synced user appearance, alert defaults, weather, startup, and update customization settings across devices",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "appTheme": {
+          "type": "string",
+          "enum": ["light", "dark"]
+        },
+        "notificationTheme": {
+          "type": "string",
+          "enum": ["match", "light", "dark"]
+        },
+        "clockFormat": {
+          "type": "string",
+          "enum": ["24h", "12h"]
+        },
+        "accentColor": {
+          "type": "string",
+          "enum": ["blue", "violet", "teal", "emerald", "rose", "orange"]
+        },
+        "uiTransparency": {
+          "type": "integer"
+        },
+        "defaultSoundPreset": {
+          "type": "string",
+          "enum": [
+            "ios-tri-tone",
+            "ios-note",
+            "ios-chime",
+            "ios-bamboo",
+            "ios-aurora",
+            "ios-pulse",
+            "crystal-chime",
+            "soft-pulse",
+            "beacon-tone",
+            "zen-gong",
+            "digital-ping",
+            "aurora-harp",
+            "amber-marimba",
+            "dewdrop-bell",
+            "horizon-chord",
+            "brisk-triad",
+            "midnight-sonar",
+            "silent"
+          ]
+        },
+        "defaultSoundVolume": {
+          "type": "number"
+        },
+        "defaultSnoozeMinutes": {
+          "type": "integer",
+          "enum": [5, 10, 15, 30]
+        },
+        "defaultVibrationPresetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "temperatureUnit": {
+          "type": "string",
+          "enum": ["c", "f"]
+        },
+        "showHeaderWeather": {
+          "type": "boolean"
+        },
+        "weatherLocation": {
+          "type": "object"
+        },
+        "launchAtStartup": {
+          "type": "boolean"
+        },
+        "startMinimized": {
+          "type": "boolean"
+        },
+        "minimizeToTray": {
+          "type": "boolean"
+        },
+        "autoDownloadUpdates": {
+          "type": "boolean"
+        },
+        "showHolidays": {
+          "type": "boolean"
+        },
+        "holidayCountryCode": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 10,
+          "pattern": "^(AUTO|[A-Z]{2,4})$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "appTheme",
+        "notificationTheme",
+        "clockFormat",
+        "accentColor",
+        "uiTransparency",
+        "defaultSoundPreset",
+        "defaultSoundVolume",
+        "defaultSnoozeMinutes",
+        "defaultVibrationPresetId",
+        "temperatureUnit",
+        "showHeaderWeather",
+        "weatherLocation",
+        "launchAtStartup",
+        "startMinimized",
+        "minimizeToTray",
+        "autoDownloadUpdates",
+        "showHolidays",
+        "holidayCountryCode",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account profile keyed by Google Auth UID"
+    },
+    "/users/{userId}/reminders/{reminderId}": {
+      "schema": { "$ref": "#/entities/ReminderItem" },
+      "description": "User-owned cloud-synced reminders and 7-day recently deleted records"
+    },
+    "/users/{userId}/preferences/{prefId}": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "User-owned synced settings and customization preferences"
+    }
+  }
+}
