@@ -11,6 +11,7 @@ export interface RecurrenceRule {
   nthWeek: number; // 1, 2, 3, 4, or -1 (last) (used when monthlyMode === 'nth-weekday')
   weekday: number; // 0..6 (used when monthlyMode === 'nth-weekday')
   targetCount?: number | null; // Expected total occurrences / duration limit (null or 0 = unlimited ♾️)
+  monthlyLimit?: number | null; // Max occurrences per calendar month (null or 0 = unlimited)
 }
 
 export type SoundPresetId =

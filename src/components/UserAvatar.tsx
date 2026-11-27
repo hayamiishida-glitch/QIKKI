@@ -5,7 +5,7 @@ export interface UserAvatarProps {
   photoURL?: string | null;
   displayName?: string | null;
   email?: string | null;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'dock';
   showTracing?: boolean;
   className?: string;
   onClick?: () => void;
@@ -50,6 +50,14 @@ const SIZE_MAP = {
     text: 'text-2xl',
     ringInset: '-inset-[3.5px]',
     glowInset: '-inset-[8px]',
+    badge: 'h-7 w-7 -bottom-1 -right-1',
+    badgeIcon: 'h-3.5 w-3.5',
+  },
+  dock: {
+    container: 'h-[88px] w-[88px]',
+    text: 'text-2xl',
+    ringInset: '-inset-[3.5px]',
+    glowInset: '-inset-[7px]',
     badge: 'h-7 w-7 -bottom-1 -right-1',
     badgeIcon: 'h-3.5 w-3.5',
   },

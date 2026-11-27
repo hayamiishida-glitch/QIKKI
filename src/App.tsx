@@ -2,6 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AnimatePresence,
   motion,
+  useScroll,
+  useSpring,
+  useTransform,
+  useVelocity,
 } from 'motion/react';
 import { Bell, Check, MapPin, Maximize2, Plus, Search } from 'lucide-react';
 import type {
@@ -264,6 +268,37 @@ export default function App() {
     count: number;
   } | null>(null);
   const congratsTimerRef = useRef<number | null>(null);
+
+  const [tiltStyle, setTiltStyle] = useState({ scale: 1 });
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  const { scrollY } = useScroll();
+  const scrollVelocity = useVelocity(scrollY);
+
+  // Soft, cushioned spring physics for scroll position
+  const smoothScrollY = useSpring(scrollY, {
+    stiffness: 65,
+    damping: 20,
+    mass: 0.45,
+  });
+
+  // Soft vertical glide with cushioned float
+  const floatY = useTransform(smoothScrollY, [0, 800], [0, 26]);
+
+  // Subtle fluid 3D pitch/tilt responding naturally to scroll velocity
+  const smoothVelocity = useSpring(scrollVelocity, {
+    stiffness: 55,
+    damping: 22,
+    mass: 0.4,
+  });
+  const floatTiltX = useTransform(smoothVelocity, [-1200, 0, 1200], [1.8, 0, -1.8]);
+
+  const handleClick = () => {
+    setTiltStyle({ scale: 0.985 });
+    setTimeout(() => {
+      setTiltStyle({ scale: 1 });
+    }, 150);
+  };
 
   const handleSelectTab = useCallback((nextTab: NavTab) => {
     setActiveTab((prevTab) => {
@@ -1495,7 +1530,14 @@ export default function App() {
   ).length;
 
   const rightOverviewCard = (
-    <div className="relative rounded-3xl">
+    <motion.div
+      ref={cardRef}
+      onClick={handleClick}
+      animate={tiltStyle}
+      transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+      style={{ y: floatY, rotateX: floatTiltX, transformPerspective: 1200 }}
+      className="relative rounded-3xl cursor-default"
+    >
       {/* Soft breathing neon ambient glow */}
       <div
         aria-hidden="true"
@@ -1516,7 +1558,7 @@ export default function App() {
       </div>
 
       <div
-        className="qikki-glass-card relative z-10 divide-y divide-slate-900/[0.08] rounded-3xl border border-white/80 bg-white/58 shadow-[0_20px_50px_-14px_rgba(15,23,42,0.22),0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(255,255,255,0.32)] backdrop-blur-[28px] backdrop-saturate-[185%] transition-shadow duration-200 lg:max-h-[calc(100dvh-9.625rem)] lg:overflow-y-auto lg:no-scrollbar dark:divide-white/[0.10] dark:border-white/[0.18] dark:bg-slate-900/38 dark:shadow-[0_24px_56px_-14px_rgba(0,0,0,0.68),0_2px_10px_-2px_rgba(0,0,0,0.35),inset_0_1.5px_0_rgba(255,255,255,0.26),inset_0_-1px_0_rgba(255,255,255,0.06)]"
+        className="qikki-glass-card relative z-10 divide-y divide-slate-900/[0.08] rounded-3xl border border-white/80 bg-white/58 shadow-[0_20px_50px_-14px_rgba(15,23,42,0.22),0_2px_8px_-2px_rgba(15,23,42,0.06),inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(255,255,255,0.32)] backdrop-blur-[28px] backdrop-saturate-[185%] transition-shadow duration-200 dark:divide-white/[0.10] dark:border-white/[0.18] dark:bg-slate-900/38 dark:shadow-[0_24px_56px_-14px_rgba(0,0,0,0.68),0_2px_10px_-2px_rgba(0,0,0,0.35),inset_0_1.5px_0_rgba(255,255,255,0.26),inset_0_-1px_0_rgba(255,255,255,0.06)]"
       >
         {/* Section 1: Next Up */}
         <section className="p-4 xl:p-4.5">
@@ -1601,63 +1643,7 @@ export default function App() {
           )}
         </section>
 
-        {/* Section 2: Compact Schedule Overview */}
-        <section className="p-4 xl:p-4.5">
-          <h2 className="font-display text-xs font-semibold text-slate-600 dark:text-slate-300/80">
-            Overview
-          </h2>
-          <dl className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5">
-            <div>
-              <dt className="text-[11px] text-slate-500 dark:text-slate-300/75">
-                Active
-              </dt>
-              <dd className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-slate-950 dark:text-white">
-                {activeReminders.length}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] text-slate-500 dark:text-slate-300/75">
-                Completed
-              </dt>
-              <dd className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-slate-950 dark:text-white">
-                {completedReminders.length}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] text-slate-500 dark:text-slate-300/75">
-                Weekly
-              </dt>
-              <dd className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-slate-950 dark:text-white">
-                {weeklyCount}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] text-slate-500 dark:text-slate-300/75">
-                Monthly
-              </dt>
-              <dd className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-slate-950 dark:text-white">
-                {monthlyCount}
-              </dd>
-            </div>
-          </dl>
-          {deletedReminders.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setHistorySubView('deleted');
-                handleSelectTab('history');
-              }}
-              className="mt-3 flex w-full items-center justify-between text-xs text-slate-600 transition-colors hover:text-slate-950 dark:text-slate-300/80 dark:hover:text-white"
-            >
-              <span>Recently deleted (7-day retention)</span>
-              <span className="font-mono font-medium tabular-nums">
-                {deletedReminders.length}
-              </span>
-            </button>
-          )}
-        </section>
-
-        {/* Section 3: Live Animated Weather Forecast */}
+        {/* Section 2: Live Animated Weather Forecast */}
         {preferences.showHeaderWeather && (
           <NextUpForecastPanel
             status={weatherStatus}
@@ -1672,7 +1658,7 @@ export default function App() {
           />
         )}
       </div>
-    </div>
+    </motion.div>
   );
 
   return (

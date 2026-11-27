@@ -55,10 +55,10 @@ service cloud.firestore {
     function isValidRecurrence(rec) {
       return rec is map &&
         rec.keys().hasAll([
-          'frequency', 'interval', 'weekdays', 'monthlyMode', 'dayOfMonth', 'nthWeek', 'weekday', 'targetCount'
+          'frequency', 'interval', 'weekdays', 'monthlyMode', 'dayOfMonth', 'nthWeek', 'weekday', 'targetCount', 'monthlyLimit'
         ]) &&
         rec.keys().hasOnly([
-          'frequency', 'interval', 'weekdays', 'monthlyMode', 'dayOfMonth', 'nthWeek', 'weekday', 'targetCount'
+          'frequency', 'interval', 'weekdays', 'monthlyMode', 'dayOfMonth', 'nthWeek', 'weekday', 'targetCount', 'monthlyLimit'
         ]) &&
         rec.frequency in ['none', 'weekly', 'monthly'] &&
         rec.interval is int && rec.interval >= 1 && rec.interval <= 100 &&
@@ -68,7 +68,8 @@ service cloud.firestore {
         rec.dayOfMonth is int && rec.dayOfMonth >= 1 && rec.dayOfMonth <= 31 &&
         rec.nthWeek is int && rec.nthWeek >= -1 && rec.nthWeek <= 4 &&
         rec.weekday is int && rec.weekday >= 0 && rec.weekday <= 6 &&
-        (rec.targetCount == null || (rec.targetCount is int && rec.targetCount >= 1 && rec.targetCount <= 365));
+        (rec.targetCount == null || (rec.targetCount is int && rec.targetCount >= 1 && rec.targetCount <= 365)) &&
+        (rec.monthlyLimit == null || (rec.monthlyLimit is int && rec.monthlyLimit >= 1 && rec.monthlyLimit <= 31));
     }
 
     function isValidSound(snd) {

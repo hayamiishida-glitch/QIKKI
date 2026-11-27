@@ -37,7 +37,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex justify-center select-none sm:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
       <nav
         aria-label="Primary dock navigation"
-        className="qikki-dock-bar pointer-events-auto flex w-[392px] max-w-[calc(100vw-1.5rem)] items-center justify-between gap-1 overflow-hidden rounded-full border border-white/85 bg-white/78 px-2.5 py-1.5 shadow-[0_16px_40px_-12px_rgba(15,23,42,0.24),inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(255,255,255,0.28)] backdrop-blur-[6px] backdrop-saturate-[140%] dark:border-white/[0.2] dark:bg-slate-900/74 dark:shadow-[0_18px_44px_-12px_rgba(0,0,0,0.72),inset_0_1.5px_0_rgba(255,255,255,0.24),inset_0_-1px_0_rgba(255,255,255,0.06)]"
+        className="qikki-dock-bar pointer-events-auto flex w-[392px] max-w-[calc(100vw-1.5rem)] items-center justify-between gap-1 overflow-hidden rounded-full border border-white/85 bg-white/78 pl-2.5 pr-0 py-1.5 shadow-[0_16px_40px_-12px_rgba(15,23,42,0.24),inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(255,255,255,0.28)] backdrop-blur-[6px] backdrop-saturate-[140%] dark:border-white/[0.2] dark:bg-slate-900/74 dark:shadow-[0_18px_44px_-12px_rgba(0,0,0,0.72),inset_0_1.5px_0_rgba(255,255,255,0.24),inset_0_-1px_0_rgba(255,255,255,0.06)]"
       >
         {/* 1. Schedule */}
         <button
@@ -178,20 +178,39 @@ export const BottomDock: React.FC<BottomDockProps> = ({
               ? `Synced as ${user.email || firstName}`
               : 'Sign in or Register to sync across devices'
           }
-          className="relative flex h-11 flex-1 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-950 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-blue-600 dark:text-slate-200/85 dark:hover:bg-white/[0.08] dark:hover:text-white"
+          className="group relative flex h-11 flex-1 items-center justify-center overflow-visible text-slate-700 transition-transform active:scale-95 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-blue-600 dark:text-slate-200/85"
         >
           {user || avatarUrl ? (
-            <UserAvatar
-              photoURL={avatarUrl}
-              displayName={user?.displayName}
-              email={user?.email}
-              size="xs"
-              showTracing={true}
-            />
+            <div className="relative flex shrink-0 items-center justify-center translate-x-2">
+              <UserAvatar
+                photoURL={avatarUrl}
+                displayName={user?.displayName}
+                email={user?.email}
+                size="dock"
+                showTracing={true}
+                className="shadow-md transition-transform duration-200 group-hover:scale-105"
+              />
+            </div>
           ) : (
-            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-900/15 bg-white/80 text-slate-700 shadow-xs dark:border-white/18 dark:bg-white/[0.12] dark:text-slate-200">
-              <UserIcon className="h-4 w-4 stroke-[2]" aria-hidden="true" />
-            </span>
+            <div className="relative flex shrink-0 items-center justify-center translate-x-2">
+              <div className="relative inline-flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full transition-transform duration-200 group-hover:scale-105">
+                <div
+                  aria-hidden="true"
+                  className="qikki-avatar-trace-halo pointer-events-none absolute -inset-[7px] overflow-hidden rounded-full blur-[5px]"
+                >
+                  <div className="qikki-avatar-trace-beam" />
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -inset-[3.5px] overflow-hidden rounded-full opacity-95"
+                >
+                  <div className="qikki-avatar-trace-beam" />
+                </div>
+                <div className="relative z-10 flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-white/80 bg-gradient-to-tr from-slate-200 to-slate-100 text-slate-700 shadow-inner dark:border-slate-800 dark:from-slate-800 dark:to-slate-700 dark:text-slate-200">
+                  <UserIcon className="h-9 w-9 stroke-[2]" aria-hidden="true" />
+                </div>
+              </div>
+            </div>
           )}
         </button>
       </nav>

@@ -233,18 +233,6 @@ export const WelcomeGreetingCard: React.FC<WelcomeGreetingCardProps> = ({
               )}
             </motion.div>
           </div>
-
-          <div className="flex shrink-0 items-center">
-            <UserAvatar
-              photoURL={avatarUrl}
-              displayName={user?.displayName}
-              email={user?.email}
-              size="lg"
-              showTracing={true}
-              showEditBadge={false}
-              onClick={onOpenAvatarPicker}
-            />
-          </div>
         </motion.div>
       </AnimatePresence>
     </section>

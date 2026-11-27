@@ -1881,21 +1881,14 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('before-quit', (event) => {
-  const currentPrefs = readDesktopPrefsFile();
-  if (
-    process.platform === 'darwin' &&
-    !forceQuitFromMenuBar &&
-    tray &&
-    currentPrefs.minimizeToTray
-  ) {
-    event.preventDefault();
-    hideMainWindowToBackground(true);
-    return;
-  }
+app.on('before-quit', () => {
   isQuitting = true;
   if (localServer) {
-    localServer.close();
+    try {
+      localServer.close();
+    } catch {
+      // Ignore
+    }
   }
 });
 

@@ -566,6 +566,41 @@ export const ReminderComposer: React.FC<ReminderComposerProps> = ({
                           );
                         })}
                       </div>
+
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-200/60 pt-3 dark:border-slate-800">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                          Max times per month
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {[null, 1, 2, 4].map((limitVal) => {
+                            const active =
+                              (draft.recurrence.monthlyLimit ?? null) ===
+                              limitVal;
+                            return (
+                              <button
+                                key={String(limitVal)}
+                                type="button"
+                                onClick={() =>
+                                  setDraft((p) => ({
+                                    ...p,
+                                    recurrence: {
+                                      ...p.recurrence,
+                                      monthlyLimit: limitVal,
+                                    },
+                                  }))
+                                }
+                                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                  active
+                                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                                    : 'bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                              >
+                                {limitVal === null ? 'Unlimited' : `${limitVal}x`}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -652,6 +687,41 @@ export const ReminderComposer: React.FC<ReminderComposerProps> = ({
                           />
                         </label>
                       )}
+
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-200/60 pt-3 dark:border-slate-800">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                          Max times per month
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {[null, 1, 2, 4].map((limitVal) => {
+                            const active =
+                              (draft.recurrence.monthlyLimit ?? null) ===
+                              limitVal;
+                            return (
+                              <button
+                                key={String(limitVal)}
+                                type="button"
+                                onClick={() =>
+                                  setDraft((p) => ({
+                                    ...p,
+                                    recurrence: {
+                                      ...p.recurrence,
+                                      monthlyLimit: limitVal,
+                                    },
+                                  }))
+                                }
+                                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                  active
+                                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                                    : 'bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                              >
+                                {limitVal === null ? 'Unlimited' : `${limitVal}x`}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       {draft.recurrence.monthlyMode === 'nth-weekday' && (
                         <div className="grid grid-cols-2 gap-2">

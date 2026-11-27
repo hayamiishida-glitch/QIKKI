@@ -26,6 +26,7 @@ export function createDefaultRecurrence(referenceDate = new Date()): RecurrenceR
     nthWeek: Math.min(4, Math.ceil(referenceDate.getDate() / 7)),
     weekday: referenceDate.getDay(),
     targetCount: 12,
+    monthlyLimit: null,
   };
 }
 
@@ -146,6 +147,35 @@ export function computeNextOccurrence(
             (7 * 24 * 60 * 60 * 1000)
         );
         if (weeksDiff >= 0 && weeksDiff % interval !== 0) {
+          continue;
+        }
+      }
+
+      if (rule.monthlyLimit && rule.monthlyLimit > 0) {
+        const cYear = candidate.getFullYear();
+        const cMonth = candidate.getMonth();
+        let countInMonth = 0;
+        const firstOfMonth = new Date(cYear, cMonth, 1, hours, minutes, seconds, 0);
+        for (
+          let testDay = new Date(firstOfMonth);
+          testDay.getTime() <= candidate.getTime();
+          testDay.setDate(testDay.getDate() + 1)
+        ) {
+          if (!selectedDays.includes(testDay.getDay())) continue;
+          if (testDay.getTime() < anchor.getTime()) continue;
+          if (interval > 1) {
+            const testWeekStart = new Date(testDay);
+            testWeekStart.setHours(0, 0, 0, 0);
+            testWeekStart.setDate(testWeekStart.getDate() - testWeekStart.getDay());
+            const wDiff = Math.round(
+              (testWeekStart.getTime() - anchorWeekStart.getTime()) /
+                (7 * 24 * 60 * 60 * 1000)
+            );
+            if (wDiff < 0 || wDiff % interval !== 0) continue;
+          }
+          countInMonth++;
+        }
+        if (countInMonth > rule.monthlyLimit) {
           continue;
         }
       }
@@ -343,6 +373,9 @@ export function getMonthReminderOccurrences(
       const anchorWeekStart = new Date(anchorDayStart);
       anchorWeekStart.setDate(anchorWeekStart.getDate() - anchorWeekStart.getDay());
 
+      let monthMatchCount = 0;
+      const monthlyLimit = rule.monthlyLimit && rule.monthlyLimit > 0 ? rule.monthlyLimit : null;
+
       for (let d = 1; d <= totalDays; d++) {
         if (placedDays.has(d)) continue;
         const cand = new Date(year, monthIndex, d, hours, minutes, seconds, 0);
@@ -360,6 +393,11 @@ export function getMonthReminderOccurrences(
         }
 
         if (exclusions && isDateExcludedForReminder(item.id, cand, exclusions)) {
+          continue;
+        }
+
+        monthMatchCount++;
+        if (monthlyLimit !== null && monthMatchCount > monthlyLimit) {
           continue;
         }
 
@@ -433,6 +471,10 @@ export function formatRecurrenceSummary(rule: RecurrenceRule): string {
   if (rule.frequency === 'none') return 'Once';
 
   const interval = Math.max(1, rule.interval || 1);
+  const limitText =
+    rule.monthlyLimit && rule.monthlyLimit > 0
+      ? ` (max ${rule.monthlyLimit}/mo)`
+      : '';
 
   if (rule.frequency === 'weekly') {
     const days = [...new Set(rule.weekdays)].sort((a, b) => a - b);
@@ -445,22 +487,22 @@ export function formatRecurrenceSummary(rule: RecurrenceRule): string {
           : days.map((d) => WEEKDAY_SHORT[d]).join(', ');
     if (interval === 1) {
       return days.length === 7 || days.join(',') === '1,2,3,4,5'
-        ? `Weekly · ${dayText}`
-        : `Every ${dayText}`;
+        ? `Weekly · ${dayText}${limitText}`
+        : `Every ${dayText}${limitText}`;
     }
-    return `Every ${interval} wks · ${dayText}`;
+    return `Every ${interval} wks · ${dayText}${limitText}`;
   }
 
   if (rule.frequency === 'monthly') {
     const prefix = interval === 1 ? 'Monthly' : `Every ${interval} mos`;
     if (rule.monthlyMode === 'last-day') {
-      return `${prefix} · Last day`;
+      return `${prefix} · Last day${limitText}`;
     }
     if (rule.monthlyMode === 'nth-weekday') {
       const nthLabel = rule.nthWeek === -1 ? 'Last' : ordinal(rule.nthWeek);
-      return `${prefix} · ${nthLabel} ${WEEKDAY_LONG[rule.weekday]}`;
+      return `${prefix} · ${nthLabel} ${WEEKDAY_LONG[rule.weekday]}${limitText}`;
     }
-    return `${prefix} · ${ordinal(rule.dayOfMonth)}`;
+    return `${prefix} · ${ordinal(rule.dayOfMonth)}${limitText}`;
   }
 
   return 'Once';
