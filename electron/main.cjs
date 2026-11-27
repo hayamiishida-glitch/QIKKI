@@ -1,12 +1,16 @@
 const { app, BrowserWindow, Menu, Tray, session, nativeImage, Notification, ipcMain, shell, powerMonitor } = require('electron');
 const crypto = require('crypto');
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
 let autoUpdater = null;
 let lastUpdateState = { status: 'idle' };
 let lastAutoCheckAt = 0;
+let pendingMacFallbackUpdate = null;
+let downloadedMacDmgPath = null;
+let macFallbackInProgress = false;
 
 function emitUpdateStatus(nextState) {
   lastUpdateState = nextState;
@@ -15,13 +19,252 @@ function emitUpdateStatus(nextState) {
   }
 }
 
+function compareSemverStrings(a, b) {
+  const clean = (v) =>
+    String(v || '')
+      .replace(/^v/i, '')
+      .split('-')[0]
+      .split('.')
+      .map((n) => parseInt(n, 10) || 0);
+  const pa = clean(a);
+  const pb = clean(b);
+  const len = Math.max(pa.length, pb.length, 3);
+  for (let i = 0; i < len; i++) {
+    const na = pa[i] ?? 0;
+    const nb = pb[i] ?? 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
+
+function getPublishRepoConfig() {
+  try {
+    const pkgPath = path.join(__dirname, '..', 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      const pub = Array.isArray(pkg?.build?.publish)
+        ? pkg.build.publish[0]
+        : pkg?.build?.publish;
+      if (pub?.owner && pub?.repo) {
+        return { owner: String(pub.owner), repo: String(pub.repo) };
+      }
+    }
+  } catch {
+    // Fall back to default repo
+  }
+  return { owner: 'hayamiishida-glitch', repo: 'QIKKI' };
+}
+
+function httpsGetJson(url, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          'User-Agent': `Qikki/${app.getVersion()}`,
+          Accept: 'application/vnd.github+json',
+        },
+      },
+      (res) => {
+        if (
+          res.statusCode &&
+          res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers.location &&
+          redirectsLeft > 0
+        ) {
+          res.resume();
+          httpsGetJson(res.headers.location, redirectsLeft - 1).then(resolve, reject);
+          return;
+        }
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+            const err = new Error(`HTTP ${res.statusCode || 0}`);
+            err.statusCode = res.statusCode;
+            reject(err);
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.setTimeout(15000, () => {
+      req.destroy(new Error('Update check timed out.'));
+    });
+  });
+}
+
+function httpsDownloadFile(url, destPath, onProgress, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          'User-Agent': `Qikki/${app.getVersion()}`,
+        },
+      },
+      (res) => {
+        if (
+          res.statusCode &&
+          res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers.location &&
+          redirectsLeft > 0
+        ) {
+          res.resume();
+          httpsDownloadFile(res.headers.location, destPath, onProgress, redirectsLeft - 1).then(resolve, reject);
+          return;
+        }
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+          res.resume();
+          reject(new Error(`HTTP ${res.statusCode || 0}`));
+          return;
+        }
+        const totalBytes = parseInt(res.headers['content-length'] || '0', 10) || 0;
+        let receivedBytes = 0;
+        const tmpPath = `${destPath}.download`;
+        const out = fs.createWriteStream(tmpPath);
+        res.on('data', (chunk) => {
+          receivedBytes += chunk.length;
+          if (totalBytes > 0 && typeof onProgress === 'function') {
+            onProgress(Math.min(100, (receivedBytes / totalBytes) * 100));
+          }
+        });
+        res.pipe(out);
+        out.on('finish', () => {
+          out.close(() => {
+            try {
+              if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+              fs.renameSync(tmpPath, destPath);
+              resolve(destPath);
+            } catch (e) {
+              reject(e);
+            }
+          });
+        });
+        out.on('error', (err) => {
+          try {
+            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+          } catch {
+            // Ignore cleanup failure
+          }
+          reject(err);
+        });
+      }
+    );
+    req.on('error', reject);
+  });
+}
+
+function showUpdateReadyNotification(version) {
+  try {
+    if (Notification.isSupported()) {
+      const iconPath = getIconPath();
+      const verLabel = version ? `v${version} ` : '';
+      const notif = new Notification({
+        title: `Qikki ${verLabel}ready to install`,
+        body:
+          process.platform === 'darwin' && downloadedMacDmgPath
+            ? 'Installer downloaded. Click Restart & Install in Qikki to open the update.'
+            : 'Update downloaded automatically. It will install when you quit, or click to open.',
+        icon: iconPath && fs.existsSync(iconPath) ? iconPath : undefined,
+      });
+      notif.on('click', () => {
+        showMainWindowFromBackground();
+      });
+      notif.show();
+    }
+  } catch {
+    // Ignore notification error
+  }
+}
+
+async function downloadMacFallbackDmg(updateMeta) {
+  if (!updateMeta?.downloadUrl) {
+    return { ok: false, message: 'No macOS installer found in this release.' };
+  }
+  const downloadsDir = app.getPath('downloads');
+  const destPath = path.join(downloadsDir, updateMeta.fileName || `Qikki-${updateMeta.version}.dmg`);
+  emitUpdateStatus({ status: 'downloading', progress: { percent: 0 } });
+  let lastPercent = -1;
+  await httpsDownloadFile(updateMeta.downloadUrl, destPath, (pct) => {
+    const rounded = Math.floor(pct);
+    if (rounded !== lastPercent) {
+      lastPercent = rounded;
+      emitUpdateStatus({ status: 'downloading', progress: { percent: rounded } });
+    }
+  });
+  downloadedMacDmgPath = destPath;
+  emitUpdateStatus({ status: 'downloaded', info: { version: updateMeta.version } });
+  showUpdateReadyNotification(updateMeta.version);
+  return { ok: true };
+}
+
+async function checkMacGitHubFallbackUpdate(autoDownload) {
+  if (macFallbackInProgress) return { ok: true };
+  macFallbackInProgress = true;
+  try {
+    emitUpdateStatus({ status: 'checking' });
+    const { owner, repo } = getPublishRepoConfig();
+    const release = await httpsGetJson(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
+    const latestVersion = String(release?.tag_name || '').replace(/^v/i, '').trim();
+    const currentVersion = app.getVersion();
+    if (!latestVersion || compareSemverStrings(latestVersion, currentVersion) <= 0) {
+      emitUpdateStatus({ status: 'not-available', info: { version: currentVersion } });
+      return { ok: true, version: currentVersion };
+    }
+    const assets = Array.isArray(release?.assets) ? release.assets : [];
+    const dmgAsset =
+      assets.find((a) => typeof a?.name === 'string' && a.name.endsWith('.dmg')) ||
+      assets.find((a) => typeof a?.name === 'string' && a.name.endsWith('-mac.zip'));
+
+    if (!dmgAsset?.browser_download_url) {
+      emitUpdateStatus({
+        status: 'available',
+        info: { version: latestVersion },
+      });
+      return { ok: true, version: latestVersion };
+    }
+
+    pendingMacFallbackUpdate = {
+      version: latestVersion,
+      downloadUrl: dmgAsset.browser_download_url,
+      fileName: dmgAsset.name,
+    };
+
+    if (autoDownload) {
+      await downloadMacFallbackDmg(pendingMacFallbackUpdate);
+    } else {
+      emitUpdateStatus({ status: 'available', info: { version: latestVersion } });
+    }
+    return { ok: true, version: latestVersion };
+  } catch (err) {
+    const msg = formatAutoUpdateError(err);
+    emitUpdateStatus({ status: 'error', message: msg });
+    return { ok: false, message: msg };
+  } finally {
+    macFallbackInProgress = false;
+  }
+}
+
 function formatAutoUpdateError(err) {
   const raw = err?.message || String(err || '');
-  if (/404|Cannot find latest|No published versions/i.test(raw)) {
-    return 'No published desktop release found on GitHub Releases yet.';
+  if (/404|Cannot find latest|No published versions|HTTP 404/i.test(raw)) {
+    return 'No public desktop release found yet (ensure the GitHub repository is public and a release has published).';
   }
   if (/code signature|Could not get code signature/i.test(raw)) {
-    return 'macOS auto-replace requires a signed release. Download the latest DMG from GitHub Releases.';
+    return 'Unsigned macOS build cannot auto-replace in-place; downloading installer instead.';
   }
   return raw;
 }
@@ -32,7 +275,9 @@ try {
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('checking-for-update', () => {
-    emitUpdateStatus({ status: 'checking' });
+    if (!macFallbackInProgress) {
+      emitUpdateStatus({ status: 'checking' });
+    }
   });
   autoUpdater.on('update-available', (info) => {
     emitUpdateStatus({ status: 'available', info });
@@ -44,30 +289,20 @@ try {
     emitUpdateStatus({ status: 'downloading', progress });
   });
   autoUpdater.on('update-downloaded', (info) => {
+    downloadedMacDmgPath = null;
     emitUpdateStatus({ status: 'downloaded', info });
-    try {
-      if (Notification.isSupported()) {
-        const iconPath = getIconPath();
-        const verLabel = info?.version ? `v${info.version} ` : '';
-        const notif = new Notification({
-          title: `Qikki ${verLabel}ready to install`,
-          body: 'Update downloaded automatically. It will install when you quit, or click to restart now.',
-          icon: iconPath && fs.existsSync(iconPath) ? iconPath : undefined,
-        });
-        notif.on('click', () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            if (!mainWindow.isVisible()) mainWindow.show();
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.focus();
-          }
-        });
-        notif.show();
-      }
-    } catch {
-      // Ignore notification error
-    }
+    showUpdateReadyNotification(info?.version);
   });
   autoUpdater.on('error', (err) => {
+    const raw = err?.message || String(err || '');
+    if (
+      process.platform === 'darwin' &&
+      /code signature|Could not get code signature|ShipIt|latest-mac\.yml/i.test(raw)
+    ) {
+      const prefs = readDesktopPrefsFile();
+      void checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
+      return;
+    }
     emitUpdateStatus({ status: 'error', message: formatAutoUpdateError(err) });
   });
 } catch {
@@ -1339,33 +1574,66 @@ app.whenReady().then(async () => {
         message: 'Updates for this version are managed automatically by the App Store / Microsoft Store.',
       };
     }
-    if (!autoUpdater || !app.isPackaged) {
+    if (!app.isPackaged) {
       return {
         ok: false,
         message: 'Automatic desktop updates run automatically on packaged builds.',
       };
     }
+    lastAutoCheckAt = Date.now();
+    if (!autoUpdater) {
+      if (process.platform === 'darwin') {
+        const prefs = readDesktopPrefsFile();
+        return checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
+      }
+      return {
+        ok: false,
+        message: 'Desktop updater module is unavailable in this build.',
+      };
+    }
     try {
-      lastAutoCheckAt = Date.now();
       const res = await autoUpdater.checkForUpdates();
       return { ok: true, version: res?.updateInfo?.version };
     } catch (err) {
+      if (process.platform === 'darwin') {
+        const prefs = readDesktopPrefsFile();
+        return checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
+      }
       return { ok: false, message: formatAutoUpdateError(err) };
     }
   });
 
   ipcMain.handle('qikki:download-update', async () => {
-    if (!autoUpdater || isStoreManagedBuild()) return { ok: false };
+    if (isStoreManagedBuild()) return { ok: false };
+    if (process.platform === 'darwin' && pendingMacFallbackUpdate) {
+      try {
+        return await downloadMacFallbackDmg(pendingMacFallbackUpdate);
+      } catch (err) {
+        return { ok: false, message: formatAutoUpdateError(err) };
+      }
+    }
+    if (!autoUpdater) return { ok: false };
     try {
       await autoUpdater.downloadUpdate();
       return { ok: true };
     } catch (err) {
+      if (process.platform === 'darwin' && pendingMacFallbackUpdate) {
+        return downloadMacFallbackDmg(pendingMacFallbackUpdate);
+      }
       return { ok: false, message: formatAutoUpdateError(err) };
     }
   });
 
   ipcMain.handle('qikki:install-update', async () => {
-    if (!autoUpdater || isStoreManagedBuild()) return { ok: false };
+    if (isStoreManagedBuild()) return { ok: false };
+    if (process.platform === 'darwin' && downloadedMacDmgPath && fs.existsSync(downloadedMacDmgPath)) {
+      await shell.openPath(downloadedMacDmgPath);
+      forceQuitFromMenuBar = true;
+      isQuitting = true;
+      setTimeout(() => app.quit(), 400);
+      return { ok: true };
+    }
+    if (!autoUpdater) return { ok: false };
     forceQuitFromMenuBar = true;
     isQuitting = true;
     autoUpdater.quitAndInstall();
@@ -1563,13 +1831,23 @@ app.whenReady().then(async () => {
   createTray();
   await createWindow();
 
-  if (autoUpdater && app.isPackaged && !isStoreManagedBuild()) {
+  if (app.isPackaged && !isStoreManagedBuild()) {
     const runBackgroundUpdateCheck = () => {
       if (lastUpdateState.status === 'downloaded' || lastUpdateState.status === 'downloading') {
         return;
       }
       lastAutoCheckAt = Date.now();
-      void autoUpdater.checkForUpdates().catch(() => {});
+      if (autoUpdater) {
+        void autoUpdater.checkForUpdates().catch(() => {
+          if (process.platform === 'darwin') {
+            const prefs = readDesktopPrefsFile();
+            void checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
+          }
+        });
+      } else if (process.platform === 'darwin') {
+        const prefs = readDesktopPrefsFile();
+        void checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
+      }
     };
 
     setTimeout(runBackgroundUpdateCheck, 8000);

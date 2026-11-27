@@ -1,8 +1,8 @@
 {
-  "version": "1.1.4",
+  "version": "1.1.5",
   "minSupportedVersion": "1.0.0",
-  "releasedAt": "2026-11-27T11:50:00.000Z",
-  "notes": "Version 1.1.4: Eliminates macOS microphone prompt via Chromium audio-input lock and helper Info.plist cleanup, plus automatic GitHub/Web updates.",
+  "releasedAt": "2026-11-27T12:25:00.000Z",
+  "notes": "Version 1.1.5: macOS menu-bar background persistence on Quit, silent Chromium audio-input lock, and automatic macOS GitHub Release DMG fallback updater.",
   "platforms": {
     "web": {
       "autoUpdate": true

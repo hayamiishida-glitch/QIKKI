@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qikki-app-v1.1.4-ios-mac';
+const CACHE_NAME = 'qikki-app-v1.1.5-ios-mac';
 const APP_SHELL = [
   '/manifest.webmanifest',
   '/favicon.ico',
