@@ -3,7 +3,7 @@ import { isDesktopApp } from './notificationService';
 export const CURRENT_APP_VERSION: string =
   typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__
     ? __APP_VERSION__
-    : '1.1.3';
+    : '1.1.4';
 
 export interface RemoteVersionManifest {
   version: string;

@@ -1194,6 +1194,7 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('Qikki');
 }
 app.commandLine.appendSwitch('enable-smooth-scrolling');
+app.commandLine.appendSwitch('disable-audio-input');
 app.commandLine.appendSwitch('disable-speech-api');
 
 app.whenReady().then(async () => {

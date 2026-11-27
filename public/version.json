@@ -1,8 +1,8 @@
 {
-  "version": "1.1.3",
+  "version": "1.1.4",
   "minSupportedVersion": "1.0.0",
-  "releasedAt": "2026-11-27T00:00:00.000Z",
-  "notes": "Version 1.1.3: New Qikki icon, smooth startup intro fade-in, microphone permission removal on macOS & Windows, and cleaner greeting card avatar.",
+  "releasedAt": "2026-11-27T11:50:00.000Z",
+  "notes": "Version 1.1.4: Eliminates macOS microphone prompt via Chromium audio-input lock and helper Info.plist cleanup, plus automatic GitHub/Web updates.",
   "platforms": {
     "web": {
       "autoUpdate": true
