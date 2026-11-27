@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   detectUserCountryCode,
   FALLBACK_COUNTRIES,
@@ -41,7 +41,7 @@ export function useLocalizedHolidays({
     'nager' | 'openholidays' | 'cache' | null
   >(null);
   const [refreshToken, setRefreshToken] = useState(0);
-  const [forceNextRefresh, setForceNextRefresh] = useState(false);
+  const forceNextRefreshRef = useRef(false);
 
   // If timezone + browser locale were both ambiguous (e.g. UTC + generic locale),
   // quietly resolve country code via lightweight GeoJS IP country lookup once.
@@ -134,10 +134,8 @@ export function useLocalizedHolidays({
     let active = true;
     setLoading(true);
     setError(null);
-    const shouldForce = forceNextRefresh;
-    if (shouldForce) {
-      setForceNextRefresh(false);
-    }
+    const shouldForce = forceNextRefreshRef.current;
+    forceNextRefreshRef.current = false;
 
     void Promise.allSettled(
       years.map((year) =>
@@ -198,11 +196,10 @@ export function useLocalizedHolidays({
     effectiveCountryName,
     uniqueYearsKey,
     refreshToken,
-    forceNextRefresh,
   ]);
 
   const refreshHolidays = useCallback(async () => {
-    setForceNextRefresh(true);
+    forceNextRefreshRef.current = true;
     setRefreshToken((n) => n + 1);
   }, []);
 

@@ -1,8 +1,8 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.6",
   "minSupportedVersion": "1.0.0",
-  "releasedAt": "2026-11-27T12:25:00.000Z",
-  "notes": "Version 1.1.5: macOS menu-bar background persistence on Quit, silent Chromium audio-input lock, and automatic macOS GitHub Release DMG fallback updater.",
+  "releasedAt": "2026-11-27T13:00:00.000Z",
+  "notes": "Version 1.1.6: Disabled microphone prompts on macOS, moved animated weather forecast into Next Up panel, empty initial schedule, and macOS updater/CI refinements.",
   "platforms": {
     "web": {
       "autoUpdate": true

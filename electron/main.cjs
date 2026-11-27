@@ -269,6 +269,42 @@ function formatAutoUpdateError(err) {
   return raw;
 }
 
+async function triggerDesktopUpdateCheck() {
+  if (isStoreManagedBuild()) {
+    return {
+      ok: false,
+      message: 'Updates for this version are managed automatically by the App Store / Microsoft Store.',
+    };
+  }
+  if (!app.isPackaged) {
+    return {
+      ok: false,
+      message: 'Automatic desktop updates run automatically on packaged builds.',
+    };
+  }
+  lastAutoCheckAt = Date.now();
+  if (!autoUpdater) {
+    if (process.platform === 'darwin') {
+      const prefs = readDesktopPrefsFile();
+      return checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
+    }
+    return {
+      ok: false,
+      message: 'Desktop updater module is unavailable in this build.',
+    };
+  }
+  try {
+    const res = await autoUpdater.checkForUpdates();
+    return { ok: true, version: res?.updateInfo?.version };
+  } catch (err) {
+    if (process.platform === 'darwin') {
+      const prefs = readDesktopPrefsFile();
+      return checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
+    }
+    return { ok: false, message: formatAutoUpdateError(err) };
+  }
+}
+
 try {
   autoUpdater = require('electron-updater').autoUpdater;
   autoUpdater.autoDownload = true;
@@ -942,17 +978,13 @@ function setupMacApplicationMenu() {
       submenu: [
         { role: 'about', label: 'About Qikki' },
         { type: 'separator' },
-        ...(!isStoreManagedBuild() && autoUpdater
+        ...(!isStoreManagedBuild() && (autoUpdater || process.platform === 'darwin')
           ? [
               {
                 label: 'Check for Updates...',
                 click: () => {
-                  if (mainWindow && !mainWindow.isDestroyed()) {
-                    if (!mainWindow.isVisible()) mainWindow.show();
-                    if (mainWindow.isMinimized()) mainWindow.restore();
-                    mainWindow.focus();
-                  }
-                  void autoUpdater.checkForUpdates().catch(() => {});
+                  showMainWindowFromBackground();
+                  void triggerDesktopUpdateCheck();
                 },
               },
               { type: 'separator' },
@@ -1270,6 +1302,13 @@ function ensureAuthSessionConfigured() {
     }
   );
   authSes.setDevicePermissionHandler?.(() => false);
+  authSes.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...(details.responseHeaders || {}) };
+    if (!headers['Permissions-Policy'] && !headers['permissions-policy']) {
+      headers['Permissions-Policy'] = ['microphone=(), camera=(), display-capture=()'];
+    }
+    callback({ responseHeaders: headers });
+  });
 
   return authSes;
 }
@@ -1469,6 +1508,11 @@ if (process.platform === 'win32') {
 app.commandLine.appendSwitch('enable-smooth-scrolling');
 app.commandLine.appendSwitch('disable-audio-input');
 app.commandLine.appendSwitch('disable-speech-api');
+app.commandLine.appendSwitch('use-fake-device-for-media-stream');
+app.commandLine.appendSwitch(
+  'disable-features',
+  'AudioServiceOutOfProcess,WebRtcHideLocalIpsWithMdns,HardwareMediaKeyHandling,MediaRouter'
+);
 
 app.whenReady().then(async () => {
   setMacDockIcon();
@@ -1568,39 +1612,7 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('qikki:check-for-updates', async () => {
-    if (isStoreManagedBuild()) {
-      return {
-        ok: false,
-        message: 'Updates for this version are managed automatically by the App Store / Microsoft Store.',
-      };
-    }
-    if (!app.isPackaged) {
-      return {
-        ok: false,
-        message: 'Automatic desktop updates run automatically on packaged builds.',
-      };
-    }
-    lastAutoCheckAt = Date.now();
-    if (!autoUpdater) {
-      if (process.platform === 'darwin') {
-        const prefs = readDesktopPrefsFile();
-        return checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
-      }
-      return {
-        ok: false,
-        message: 'Desktop updater module is unavailable in this build.',
-      };
-    }
-    try {
-      const res = await autoUpdater.checkForUpdates();
-      return { ok: true, version: res?.updateInfo?.version };
-    } catch (err) {
-      if (process.platform === 'darwin') {
-        const prefs = readDesktopPrefsFile();
-        return checkMacGitHubFallbackUpdate(prefs.autoDownload !== false);
-      }
-      return { ok: false, message: formatAutoUpdateError(err) };
-    }
+    return triggerDesktopUpdateCheck();
   });
 
   ipcMain.handle('qikki:download-update', async () => {

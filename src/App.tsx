@@ -3,14 +3,13 @@ import {
   AnimatePresence,
   motion,
 } from 'motion/react';
-import { Bell, Check, CheckCircle2, Cloud, LogOut, MapPin, Maximize2, Plus, Search, User } from 'lucide-react';
+import { Bell, Check, MapPin, Maximize2, Plus, Search } from 'lucide-react';
 import type {
   PortableSyncBundle,
   Reminder,
   SyncAdapterStatus,
 } from './types/reminder';
 import {
-  computeNextOccurrence,
   computeNextUnskippedOccurrence,
   createDefaultRecurrence,
   formatRecurrenceSummary,
@@ -79,7 +78,7 @@ import { AmbientDarkBackdrop } from './components/AmbientDarkBackdrop';
 import { MonthCalendarView } from './components/MonthCalendarView';
 import { AuthModal } from './components/AuthModal';
 import { QikkiStartupSplash } from './components/QikkiStartupSplash';
-import { UserAvatar } from './components/UserAvatar';
+import { NextUpForecastPanel } from './components/NextUpForecastPanel';
 import { ProfilePictureModal } from './components/ProfilePictureModal';
 import {
   EventContextMenu,
@@ -109,107 +108,19 @@ const centerPopVariants = {
   },
 };
 
-const SEEDED_KEY = 'cadence_seeded_v1';
-const SEEDED_UNTOUCHED_KEY = 'cadence_seeded_untouched_v1';
-const SEED_IDS_SET = new Set([
+const LEGACY_SEEDED_KEY = 'cadence_seeded_v1';
+const LEGACY_SEEDED_UNTOUCHED_KEY = 'cadence_seeded_untouched_v1';
+const LEGACY_SEED_IDS_SET = new Set([
   'seed-focus-stretch',
   'seed-weekly-sync',
   'seed-monthly-invoice',
 ]);
 
-function createSeedReminders(): Reminder[] {
-  const now = new Date();
-  const in25m = new Date(now.getTime() + 25 * 60000);
-  in25m.setSeconds(0, 0);
-
-  const mondayMorning = new Date(now);
-  mondayMorning.setDate(now.getDate() + ((1 - now.getDay() + 7) % 7 || 7));
-  mondayMorning.setHours(9, 30, 0, 0);
-
-  const monthlyBill = new Date(now.getFullYear(), now.getMonth(), 28, 18, 0, 0, 0);
-  if (monthlyBill.getTime() <= now.getTime()) {
-    monthlyBill.setMonth(monthlyBill.getMonth() + 1);
-  }
-
-  const createdIso = now.toISOString();
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  const device = detectDeviceOrigin();
-
-  return [
-    {
-      id: 'seed-focus-stretch',
-      title: 'Posture & hydration break',
-      notes: 'Step away from the desk for 3 minutes and refill water.',
-      triggerAt: in25m.toISOString(),
-      timezone: tz,
-      recurrence: createDefaultRecurrence(in25m),
-      sound: { presetId: 'crystal-chime', volume: 0.85, repeatCount: 1 },
-      vibration: { ...VIBRATION_PRESETS[0] },
-      status: 'active',
-      snoozedUntil: null,
-      lastTriggeredAt: null,
-      completedCount: 0,
-      createdAt: createdIso,
-      updatedAt: createdIso,
-      syncVersion: 1,
-      deviceOrigin: device,
-      deletedAt: null,
-      expiresAt: null,
-    },
-    {
-      id: 'seed-weekly-sync',
-      title: 'Weekly planning & inbox zero',
-      notes: 'Review weekly goals and clear pending action items.',
-      triggerAt: mondayMorning.toISOString(),
-      timezone: tz,
-      recurrence: {
-        ...createDefaultRecurrence(mondayMorning),
-        frequency: 'weekly',
-        interval: 1,
-        weekdays: [1, 4],
-        targetCount: 8,
-      },
-      sound: { presetId: 'beacon-tone', volume: 0.85, repeatCount: 2 },
-      vibration: { ...VIBRATION_PRESETS[2] },
-      status: 'active',
-      snoozedUntil: null,
-      lastTriggeredAt: null,
-      completedCount: 2,
-      createdAt: createdIso,
-      updatedAt: createdIso,
-      syncVersion: 1,
-      deviceOrigin: device,
-      deletedAt: null,
-      expiresAt: null,
-    },
-    {
-      id: 'seed-monthly-invoice',
-      title: 'Monthly utility & subscription review',
-      notes: 'Check recurring charges before statement close.',
-      triggerAt: monthlyBill.toISOString(),
-      timezone: tz,
-      recurrence: {
-        ...createDefaultRecurrence(monthlyBill),
-        frequency: 'monthly',
-        interval: 1,
-        monthlyMode: 'day-of-month',
-        dayOfMonth: 28,
-        targetCount: 12,
-      },
-      sound: { presetId: 'zen-gong', volume: 0.9, repeatCount: 1 },
-      vibration: { ...VIBRATION_PRESETS[3] },
-      status: 'active',
-      snoozedUntil: null,
-      lastTriggeredAt: null,
-      completedCount: 1,
-      createdAt: createdIso,
-      updatedAt: createdIso,
-      syncVersion: 1,
-      deviceOrigin: device,
-      deletedAt: null,
-      expiresAt: null,
-    },
-  ];
+function isUntouchedLegacySeedSnapshot(active: Reminder[], deleted: Reminder[]): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  if (localStorage.getItem(LEGACY_SEEDED_UNTOUCHED_KEY) !== '1') return false;
+  if (deleted.length > 0 || active.length === 0) return false;
+  return active.every((r) => LEGACY_SEED_IDS_SET.has(r.id));
 }
 
 export default function App() {
@@ -255,7 +166,12 @@ export default function App() {
     applyCloudWeatherLocation,
   } = useWeatherForecast();
   const [initialSnap] = useState(() => storageAdapter.loadSnapshotSync());
-  const [reminders, setReminders] = useState<Reminder[]>(() => initialSnap?.active ?? []);
+  const [reminders, setReminders] = useState<Reminder[]>(() => {
+    if (!initialSnap) return [];
+    return isUntouchedLegacySeedSnapshot(initialSnap.active, initialSnap.deleted)
+      ? []
+      : initialSnap.active;
+  });
   const [deletedReminders, setDeletedReminders] = useState<Reminder[]>(
     () => initialSnap?.deleted ?? []
   );
@@ -651,17 +567,19 @@ export default function App() {
     (async () => {
       const { active, deleted } = await storageAdapter.loadAllWithDeleted();
       if (!mounted) return;
-      if (active.length === 0 && deleted.length === 0 && !localStorage.getItem(SEEDED_KEY)) {
-        const seeded = createSeedReminders();
-        await storageAdapter.saveAll(seeded);
-        localStorage.setItem(SEEDED_KEY, '1');
-        localStorage.setItem(SEEDED_UNTOUCHED_KEY, '1');
+      if (isUntouchedLegacySeedSnapshot(active, deleted)) {
+        await storageAdapter.saveAll([]);
+        try {
+          localStorage.removeItem(LEGACY_SEEDED_KEY);
+          localStorage.removeItem(LEGACY_SEEDED_UNTOUCHED_KEY);
+        } catch {
+          // Ignore storage errors
+        }
         if (mounted) {
-          setReminders(seeded);
+          setReminders([]);
           setDeletedReminders([]);
         }
       } else {
-        localStorage.setItem(SEEDED_KEY, '1');
         setReminders(active);
         setDeletedReminders(deleted);
       }
@@ -678,19 +596,19 @@ export default function App() {
       try {
         const localAll = await storageAdapter.loadAllRaw();
         const purgedIds = storageAdapter.getPurgedIds();
-        const hasUntouchedSeeds =
-          typeof localStorage !== 'undefined' &&
-          localStorage.getItem(SEEDED_UNTOUCHED_KEY) === '1';
         const mergedAll = await syncLocalAndCloudReminders(
           uid,
           localAll,
           purgedIds,
-          detectDeviceOrigin(),
-          hasUntouchedSeeds ? { skipUntouchedSeedIds: SEED_IDS_SET } : undefined
+          detectDeviceOrigin()
         );
         const split = await storageAdapter.writeCloudMirror(mergedAll);
         storageAdapter.clearPurgedIds();
-        localStorage.removeItem(SEEDED_UNTOUCHED_KEY);
+        try {
+          localStorage.removeItem(LEGACY_SEEDED_UNTOUCHED_KEY);
+        } catch {
+          // Ignore storage errors
+        }
         setReminders(split.active);
         setDeletedReminders(split.deleted);
         const nowIso = new Date().toISOString();
@@ -858,7 +776,7 @@ export default function App() {
 
   const persistReminders = useCallback(async (nextList: Reminder[]) => {
     try {
-      localStorage.removeItem(SEEDED_UNTOUCHED_KEY);
+      localStorage.removeItem(LEGACY_SEEDED_UNTOUCHED_KEY);
     } catch {
       // Ignore storage errors
     }
@@ -1221,7 +1139,7 @@ export default function App() {
 
   const handleDeleteReminder = async (target: Reminder) => {
     try {
-      localStorage.removeItem(SEEDED_UNTOUCHED_KEY);
+      localStorage.removeItem(LEGACY_SEEDED_UNTOUCHED_KEY);
     } catch {
       // Ignore storage errors
     }
@@ -1433,9 +1351,9 @@ export default function App() {
     setNotifPerm(perm);
     if (perm === 'granted') {
       setDismissedNotifPrompt(true);
-      showToast('Windows desktop notifications enabled');
+      showToast('Desktop notifications enabled');
     } else if (isEmbeddedIframe()) {
-      showToast('Open Qikki in its own browser tab to enable Windows alerts');
+      showToast('Open Qikki in its own browser tab to enable desktop alerts');
     } else if (perm === 'denied') {
       showToast('Notifications are blocked in your browser site settings');
     }
@@ -1460,6 +1378,28 @@ export default function App() {
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       );
   }, [reminders]);
+
+  const handleOpenNewReminder = useCallback(() => {
+    const defaultVib =
+      VIBRATION_PRESETS.find(
+        (v) => v.presetId === preferences.defaultVibrationPresetId
+      ) ?? VIBRATION_PRESETS[0];
+    setComposerDraft(
+      createEmptyDraft({
+        sound: {
+          presetId: preferences.defaultSoundPreset,
+          volume: preferences.defaultSoundVolume,
+          repeatCount: 1,
+        },
+        vibration: { ...defaultVib },
+      })
+    );
+    setComposerOpen(true);
+  }, [
+    preferences.defaultSoundPreset,
+    preferences.defaultSoundVolume,
+    preferences.defaultVibrationPresetId,
+  ]);
 
   const handleScheduleOnDate = useCallback((date: Date) => {
     const now = new Date();
@@ -1645,9 +1585,19 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <p className="mt-2.5 text-sm text-slate-600 dark:text-slate-300/80">
-              No active reminders queued.
-            </p>
+            <div className="mt-2.5 space-y-2.5">
+              <p className="text-sm text-slate-600 dark:text-slate-300/80">
+                No reminders scheduled yet.
+              </p>
+              <button
+                type="button"
+                onClick={handleOpenNewReminder}
+                className="qikki-accent-btn inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shadow-xs transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Add Reminder</span>
+              </button>
+            </div>
           )}
         </section>
 
@@ -1707,101 +1657,20 @@ export default function App() {
           )}
         </section>
 
-        {/* Section 3: Cloud Sync */}
-        <section className="space-y-2.5 p-4 xl:p-4.5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-xs font-semibold text-slate-600 dark:text-slate-300/80">
-              Cloud Sync
-            </h2>
-            {user && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
-                {isCloudSyncing ? 'Syncing' : 'Active'}
-              </span>
-            )}
-          </div>
-
-          {user ? (
-            <div className="space-y-2.5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <UserAvatar
-                  photoURL={avatarUrl}
-                  displayName={user.displayName}
-                  email={user.email}
-                  size="sm"
-                  showTracing={true}
-                  showEditBadge={true}
-                  onClick={() => setAvatarModalOpen(true)}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
-                    {user.displayName || 'Qikki Account'}
-                  </p>
-                  <p className="truncate text-[11px] text-slate-500 dark:text-slate-300/75">
-                    {user.email}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleOpenSyncPreferences}
-                  className="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-                >
-                  Manage Sync →
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void signOut().then(() => {
-                      showToast('Signed out of Qikki Cloud');
-                    });
-                  }}
-                  className="inline-flex items-center gap-1 text-xs text-slate-500 transition-colors hover:text-red-600 dark:text-slate-300/75 dark:hover:text-red-300"
-                >
-                  <LogOut className="h-3 w-3" aria-hidden="true" />
-                  <span>Sign out</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2.5">
-                <UserAvatar
-                  photoURL={avatarUrl}
-                  displayName="Guest"
-                  size="sm"
-                  showTracing={true}
-                  showEditBadge={true}
-                  onClick={() => setAvatarModalOpen(true)}
-                />
-                <div className="min-w-0 flex-1">
-                  <button
-                    type="button"
-                    onClick={() => setAvatarModalOpen(true)}
-                    className="text-left text-xs font-semibold text-slate-800 transition-colors hover:text-blue-600 dark:text-slate-100 dark:hover:text-blue-300"
-                  >
-                    Customize Profile Picture
-                  </button>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-300/75">
-                    Choose a cute preset or upload
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300/80">
-                Sign in to sync your schedules and alarms securely across all devices.
-              </p>
-              <button
-                type="button"
-                onClick={() => setAuthModalOpen(true)}
-                className="qikki-accent-btn inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold shadow-xs transition-colors"
-              >
-                <User className="h-3.5 w-3.5" />
-                <span>Sign In / Create Account</span>
-              </button>
-            </div>
-          )}
-        </section>
+        {/* Section 3: Live Animated Weather Forecast */}
+        {preferences.showHeaderWeather && (
+          <NextUpForecastPanel
+            status={weatherStatus}
+            forecast={weatherForecast}
+            errorMessage={weatherError}
+            unit={preferences.temperatureUnit}
+            clockFormat={preferences.clockFormat}
+            onToggleUnit={(unit) => updatePreferences({ temperatureUnit: unit })}
+            onRequestLocation={requestLocationAndForecast}
+            onRefresh={refreshForecast}
+            onOpenPreferences={() => handleSelectTab('preferences')}
+          />
+        )}
       </div>
     </div>
   );
@@ -1822,18 +1691,6 @@ export default function App() {
       >
       {!webMinimized && (
         <TopBar
-          onSelectTab={handleSelectTab}
-          showWeather={preferences.showHeaderWeather}
-          weatherStatus={weatherStatus}
-          weatherForecast={weatherForecast}
-          weatherError={weatherError}
-          temperatureUnit={preferences.temperatureUnit}
-          clockFormat={preferences.clockFormat}
-          onToggleTemperatureUnit={(unit) =>
-            updatePreferences({ temperatureUnit: unit })
-          }
-          onRequestWeatherLocation={requestLocationAndForecast}
-          onRefreshWeather={refreshForecast}
           isWebExpanded={webExpanded}
           onWebMinimize={() => {
             setWebMinimized(true);
@@ -2081,7 +1938,7 @@ export default function App() {
           ) : (
             <div
               key="view-workspace"
-              className="w-full min-w-0 lg:pr-[308px] xl:pr-[340px]"
+              className="w-full min-w-0 lg:pr-[324px] xl:pr-[356px]"
             >
               {/* Left / Main Workspace */}
               <div className="min-w-0 space-y-5">
@@ -2107,7 +1964,7 @@ export default function App() {
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-300" aria-hidden="true" />
                       <span>
-                        Allow Qikki to access your location to show an accurate live weather &amp; rain forecast in the top bar. Your location is never collected.
+                        Allow Qikki to access your location to show an accurate live weather &amp; rain forecast in your Next Up panel. Your location is never collected.
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -2258,7 +2115,9 @@ export default function App() {
                           searchPlaceholder: 'Filter recurring...',
                         }}
                         emptyTitle="No recurring reminders yet"
-                        emptyDescription="Use the + button in the bottom dock to set up weekly weekday routines or monthly schedules that auto-advance after each completion."
+                        emptyDescription="Create weekly weekday routines or monthly schedules that auto-advance after each completion."
+                        emptyActionLabel="Add Reminder"
+                        onEmptyAction={handleOpenNewReminder}
                         onComplete={handleCompleteReminder}
                         onSnooze={handleSnoozeReminder}
                         onEdit={(item) => {
@@ -2394,7 +2253,7 @@ export default function App() {
               webExpanded ? 'max-w-none' : 'max-w-[1640px]'
             }`}
           >
-            <aside className="pointer-events-auto my-auto w-[280px] xl:w-[310px]">
+            <aside className="pointer-events-auto my-auto w-[300px] xl:w-[332px]">
               {rightOverviewCard}
             </aside>
           </div>
@@ -2405,23 +2264,7 @@ export default function App() {
         <BottomDock
           activeTab={activeTab}
           onSelectTab={handleSelectTab}
-          onOpenCreatePopup={() => {
-            const defaultVib =
-              VIBRATION_PRESETS.find(
-                (v) => v.presetId === preferences.defaultVibrationPresetId
-              ) ?? VIBRATION_PRESETS[0];
-            setComposerDraft(
-              createEmptyDraft({
-                sound: {
-                  presetId: preferences.defaultSoundPreset,
-                  volume: preferences.defaultSoundVolume,
-                  repeatCount: 1,
-                },
-                vibration: { ...defaultVib },
-              })
-            );
-            setComposerOpen(true);
-          }}
+          onOpenCreatePopup={handleOpenNewReminder}
           onOpenAuth={() => setAuthModalOpen(true)}
           onOpenSyncPreferences={handleOpenSyncPreferences}
           user={user}

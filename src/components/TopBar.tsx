@@ -1,25 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Minimize2, Minus, Plus, X } from 'lucide-react';
-import type { TemperatureUnit, ClockFormat } from '../hooks/useAppPreferences';
-import type {
-  WeatherForecastData,
-  WeatherLocationStatus,
-} from '../hooks/useWeatherForecast';
-import { TopBarWeather } from './TopBarWeather';
 
 export type NavTab = 'upcoming' | 'history' | 'preferences';
 
 interface TopBarProps {
-  onSelectTab: (tab: NavTab) => void;
-  showWeather?: boolean;
-  weatherStatus: WeatherLocationStatus;
-  weatherForecast: WeatherForecastData | null;
-  weatherError: string | null;
-  temperatureUnit: TemperatureUnit;
-  clockFormat?: ClockFormat;
-  onToggleTemperatureUnit: (unit: TemperatureUnit) => void;
-  onRequestWeatherLocation: () => Promise<void>;
-  onRefreshWeather: () => Promise<void>;
   isWebExpanded?: boolean;
   onWebMinimize?: () => void;
   onWebToggleExpand?: () => void;
@@ -50,16 +34,6 @@ export const GoogleMark: React.FC<{ className?: string }> = ({
 );
 
 export const TopBar: React.FC<TopBarProps> = ({
-  onSelectTab,
-  showWeather = true,
-  weatherStatus,
-  weatherForecast,
-  weatherError,
-  temperatureUnit,
-  clockFormat = '24h',
-  onToggleTemperatureUnit,
-  onRequestWeatherLocation,
-  onRefreshWeather,
   isWebExpanded = false,
   onWebMinimize,
   onWebToggleExpand,
@@ -224,22 +198,8 @@ export const TopBar: React.FC<TopBarProps> = ({
           </span>
         </div>
 
-        {/* Right: Weather Widget */}
-        <div className="window-no-drag flex items-center justify-end justify-self-end min-w-0 shrink-0">
-          {showWeather && (
-            <TopBarWeather
-              status={weatherStatus}
-              forecast={weatherForecast}
-              errorMessage={weatherError}
-              unit={temperatureUnit}
-              clockFormat={clockFormat}
-              onToggleUnit={onToggleTemperatureUnit}
-              onRequestLocation={onRequestWeatherLocation}
-              onRefresh={onRefreshWeather}
-              onOpenPreferences={() => onSelectTab('preferences')}
-            />
-          )}
-        </div>
+        {/* Right: Balanced spacer for centered Qikki mark */}
+        <div aria-hidden="true" className="justify-self-end" />
       </div>
     </header>
   );

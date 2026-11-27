@@ -915,7 +915,7 @@ export const PreferencesView: React.FC<PreferencesViewProps> = ({
                 ? `Showing live forecast for ${weatherForecast.locationName}${
                     weatherForecast.regionLabel ? `, ${weatherForecast.regionLabel}` : ''
                   }.`
-                : 'Allow location access or select a city to display accurate live weather in the header bar.'}
+                : 'Allow location access or select a city to display accurate live weather in the Next Up panel.'}
             </p>
           </div>
 
@@ -968,8 +968,8 @@ export const PreferencesView: React.FC<PreferencesViewProps> = ({
 
         <div className="mt-5 space-y-4 border-t border-slate-900/[0.08] pt-4 dark:border-white/[0.09]">
           <ToggleSwitchRow
-            label="Show animated weather in top bar"
-            description="Display compact live temperature and animated forecast conditions next to window controls."
+            label="Show animated forecast in Next Up panel"
+            description="Display live temperature, animated weather scene, and hourly conditions in the Next Up panel."
             checked={preferences.showHeaderWeather}
             onChange={(next) =>
               onUpdatePreferences({ showHeaderWeather: next })
@@ -982,7 +982,7 @@ export const PreferencesView: React.FC<PreferencesViewProps> = ({
                 Temperature unit
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-300/75">
-                Choose Celsius or Fahrenheit for the top-bar weather forecast.
+                Choose Celsius or Fahrenheit for the Next Up weather forecast.
               </p>
             </div>
             <div className="inline-flex rounded-xl bg-slate-900/[0.06] p-1 dark:bg-white/[0.07]">
