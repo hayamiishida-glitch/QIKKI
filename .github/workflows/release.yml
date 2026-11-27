@@ -15,8 +15,50 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    name: Prepare GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            RAW_VER="$INPUT_VERSION"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            RAW_VER="$REF_NAME"
+          else
+            RAW_VER="$(node -p "require('./package.json').version")"
+          fi
+          CLEAN_VER="${RAW_VER#v}"
+          echo "version=$CLEAN_VER" >> "$GITHUB_OUTPUT"
+          echo "tag=v$CLEAN_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure GitHub Release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Qikki v$VERSION" \
+              --notes "Automated desktop release for Qikki v$VERSION (macOS & Windows)."
+          fi
+
   build-macos:
     name: Build & Publish macOS (DMG + Auto-Update ZIP)
+    needs: prepare-release
     runs-on: macos-latest
     steps:
       - name: Checkout repository
@@ -26,22 +68,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Sync GitHub repository & version for auto-updater
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
-          REF_NAME: ${{ github.ref_name }}
+        run: node scripts/sync-publish-repo.mjs --version "${{ needs.prepare-release.outputs.version }}"
+
+      - name: Ensure macOS entitlements exist
         run: |
-          if [ -n "$INPUT_VERSION" ]; then
-            node scripts/sync-publish-repo.mjs --version "$INPUT_VERSION"
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            node scripts/sync-publish-repo.mjs --version "$REF_NAME"
-          else
-            node scripts/sync-publish-repo.mjs
+          if [ ! -f build/entitlements.mac.plist ]; then
+            mkdir -p build
+            cat <<'EOF' > build/entitlements.mac.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>com.apple.security.cs.allow-jit</key>
+              <true/>
+              <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+              <true/>
+              <key>com.apple.security.cs.disable-library-validation</key>
+              <true/>
+              <key>com.apple.security.network.client</key>
+              <true/>
+            </dict>
+          </plist>
+          EOF
           fi
 
       - name: Build web bundle
@@ -60,6 +113,7 @@ jobs:
 
   build-windows:
     name: Build & Publish Windows (NSIS Auto-Updater + Portable)
+    needs: prepare-release
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -69,24 +123,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Sync GitHub repository & version for auto-updater
-        shell: bash
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          if [ -n "$INPUT_VERSION" ]; then
-            node scripts/sync-publish-repo.mjs --version "$INPUT_VERSION"
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            node scripts/sync-publish-repo.mjs --version "$REF_NAME"
-          else
-            node scripts/sync-publish-repo.mjs
-          fi
+        run: node scripts/sync-publish-repo.mjs --version "${{ needs.prepare-release.outputs.version }}"
 
       - name: Build web bundle
         run: npm run build
