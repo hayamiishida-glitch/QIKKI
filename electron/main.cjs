@@ -97,22 +97,49 @@ let localServerPort = null;
 let localServerUrl = null;
 let localServerStartPromise = null;
 let isQuitting = false;
+let forceQuitFromMenuBar = false;
 let cachedIconPath = null;
 let distAssetCache = null;
 let authSessionConfigured = false;
 let pendingDesktopAuth = null;
 let pendingBrowserAuth = null;
 
+function showMainWindowFromBackground() {
+  if (process.platform === 'darwin' && app.dock) {
+    try {
+      app.dock.show();
+    } catch {
+      // Ignore dock show error
+    }
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    void createWindow();
+    return;
+  }
+  if (!mainWindow.isVisible()) mainWindow.show();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+}
+
+function hideMainWindowToBackground(hideDock = false) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+    mainWindow.hide();
+  }
+  if (hideDock && process.platform === 'darwin' && app.dock) {
+    try {
+      app.dock.hide();
+    } catch {
+      // Ignore dock hide error
+    }
+  }
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (!mainWindow.isVisible()) mainWindow.show();
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    showMainWindowFromBackground();
   });
 }
 
@@ -706,6 +733,12 @@ function setupMacApplicationMenu() {
           label: 'Quit Qikki',
           accelerator: 'Command+Q',
           click: () => {
+            const currentPrefs = readDesktopPrefsFile();
+            if (tray && currentPrefs.minimizeToTray) {
+              hideMainWindowToBackground(true);
+              return;
+            }
+            forceQuitFromMenuBar = true;
             isQuitting = true;
             app.quit();
           },
@@ -746,11 +779,7 @@ function refreshTrayMenu() {
     {
       label: 'Open Qikki',
       click: () => {
-        if (mainWindow) {
-          if (!mainWindow.isVisible()) mainWindow.show();
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.focus();
-        }
+        showMainWindowFromBackground();
       },
     },
     {
@@ -783,6 +812,7 @@ function refreshTrayMenu() {
     {
       label: 'Quit Qikki',
       click: () => {
+        forceQuitFromMenuBar = true;
         isQuitting = true;
         app.quit();
       },
@@ -798,18 +828,18 @@ function createTray() {
   const traySize = process.platform === 'darwin' ? 18 : 16;
   const img = nativeImage.createFromPath(iconPath).resize({ width: traySize, height: traySize });
   tray = new Tray(img);
-  tray.setToolTip('Qikki');
+  tray.setToolTip('Qikki — Running in background');
   refreshTrayMenu();
-  tray.on('click', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isVisible()) {
-      mainWindow.focus();
-    } else {
-      mainWindow.show();
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
+  if (process.platform !== 'darwin') {
+    tray.on('click', () => {
+      if (!mainWindow) return;
+      if (mainWindow.isVisible()) {
+        mainWindow.focus();
+      } else {
+        showMainWindowFromBackground();
+      }
+    });
+  }
 }
 
 async function createWindow() {
@@ -868,12 +898,20 @@ async function createWindow() {
     mainWindow?.webContents.send('qikki:maximize-changed', false);
   });
 
-  // Optionally minimize to Windows system tray on close so scheduled reminders keep running
+  if (startHidden && process.platform === 'darwin' && app.dock) {
+    try {
+      app.dock.hide();
+    } catch {
+      // Ignore dock hide error
+    }
+  }
+
+  // Optionally minimize to tray/menu bar on close so scheduled reminders keep running
   mainWindow.on('close', (event) => {
     const currentPrefs = readDesktopPrefsFile();
-    if (!isQuitting && tray && currentPrefs.minimizeToTray) {
+    if (!isQuitting && !forceQuitFromMenuBar && tray && currentPrefs.minimizeToTray) {
       event.preventDefault();
-      mainWindow.hide();
+      hideMainWindowToBackground(false);
     } else if (!isQuitting) {
       isQuitting = true;
     }
@@ -1328,6 +1366,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('qikki:install-update', async () => {
     if (!autoUpdater || isStoreManagedBuild()) return { ok: false };
+    forceQuitFromMenuBar = true;
     isQuitting = true;
     autoUpdater.quitAndInstall();
     return { ok: true };
@@ -1380,11 +1419,7 @@ app.whenReady().then(async () => {
           silent: Boolean(payload && payload.silent),
         });
         notif.on('click', () => {
-          if (mainWindow) {
-            if (!mainWindow.isVisible()) mainWindow.show();
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.focus();
-          }
+          showMainWindowFromBackground();
         });
         notif.show();
         return { ok: true, channel: 'electron-toast' };
@@ -1546,18 +1581,28 @@ app.whenReady().then(async () => {
     });
   }
 
+  powerMonitor.on('shutdown', () => {
+    forceQuitFromMenuBar = true;
+    isQuitting = true;
+  });
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      void createWindow();
-    } else if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindowFromBackground();
   });
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  const currentPrefs = readDesktopPrefsFile();
+  if (
+    process.platform === 'darwin' &&
+    !forceQuitFromMenuBar &&
+    tray &&
+    currentPrefs.minimizeToTray
+  ) {
+    event.preventDefault();
+    hideMainWindowToBackground(true);
+    return;
+  }
   isQuitting = true;
   if (localServer) {
     localServer.close();

@@ -410,7 +410,11 @@ export const PreferencesView: React.FC<PreferencesViewProps> = ({
 
           <ToggleSwitchRow
             label="Keep running in menu bar / tray when closed"
-            description="Hide Qikki to the tray or menu bar instead of exiting when clicking the close button so alerts keep firing."
+            description={
+              isDesktop && desktopPlatform === 'darwin'
+                ? 'Keep Qikki running in the macOS top menu bar when closed or quit with Cmd+Q. Choose Quit Qikki from the top-right menu bar icon to exit completely.'
+                : 'Hide Qikki to the tray or menu bar instead of exiting when clicking the close button so alerts keep firing.'
+            }
             checked={desktopPrefs.minimizeToTray}
             disabled={isDesktop && !desktopPrefsLoaded}
             onChange={(next) => {
