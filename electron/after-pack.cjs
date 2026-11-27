@@ -10,35 +10,16 @@ const KEYS_TO_REMOVE = [
 ];
 
 function stripMediaPlistKeys(plistPath) {
-  if (!fs.existsSync(plistPath)) return false;
-  let modified = false;
+  if (!fs.existsSync(plistPath)) return;
   for (const key of KEYS_TO_REMOVE) {
     try {
       execFileSync('/usr/libexec/PlistBuddy', ['-c', `Delete :${key}`, plistPath], {
         stdio: 'ignore',
       });
-      modified = true;
     } catch {
       // Key already absent
     }
   }
-  return modified;
-}
-
-function collectNestedInfoPlists(dir, results = []) {
-  if (!fs.existsSync(dir)) return results;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name.endsWith('.app')) {
-        results.push(path.join(fullPath, 'Contents', 'Info.plist'));
-      }
-      collectNestedInfoPlists(fullPath, results);
-    } else if (entry.isFile() && entry.name === 'Info.plist') {
-      results.push(fullPath);
-    }
-  }
-  return results;
 }
 
 exports.default = async function afterPack(context) {
@@ -49,26 +30,16 @@ exports.default = async function afterPack(context) {
   const appPath = path.join(context.appOutDir, appName);
   if (!fs.existsSync(appPath)) return;
 
-  const plistTargets = new Set([
-    path.join(appPath, 'Contents', 'Info.plist'),
-    ...collectNestedInfoPlists(path.join(appPath, 'Contents', 'Frameworks')),
-  ]);
+  // Strip usage keys from main bundle Info.plist
+  stripMediaPlistKeys(path.join(appPath, 'Contents', 'Info.plist'));
 
-  let changedAny = false;
-  for (const plistPath of plistTargets) {
-    if (stripMediaPlistKeys(plistPath)) {
-      changedAny = true;
-    }
-  }
-
-  // Keep ad-hoc signature valid on Apple Silicon when Developer ID signing is disabled
-  if (changedAny && process.env.CSC_IDENTITY_AUTO_DISCOVERY === 'false') {
-    try {
-      execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], {
-        stdio: 'ignore',
-      });
-    } catch {
-      // Ignore if codesign unavailable
+  // Strip usage keys from direct Helper .app bundles (without traversing .framework symlinks)
+  const frameworksDir = path.join(appPath, 'Contents', 'Frameworks');
+  if (fs.existsSync(frameworksDir)) {
+    for (const entry of fs.readdirSync(frameworksDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name.endsWith('.app')) {
+        stripMediaPlistKeys(path.join(frameworksDir, entry.name, 'Contents', 'Info.plist'));
+      }
     }
   }
 };
